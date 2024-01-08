@@ -1,7 +1,6 @@
 // Custom rollup plugin for uploading rollbar deploys
 import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
-import glob from 'fast-glob'
 import VError from 'verror'
 import { ROLLBAR_ENDPOINT } from './constants'
 
@@ -58,18 +57,11 @@ export default function rollbarSourcemaps({
       rollbarEndpoint
     },
     name: 'vite-plugin-rollbar',
-    async writeBundle() {
-      const files = await glob('./**/*.map', { cwd: outputDir })
+    async writeBundle(options, bundle) {
+      const files = Object.keys(bundle).filter((file) => path.extname(file) == '.js').map((file) => `${file}.map`);
       const sourcemaps = files
         .map((file) => {
           const sourcePath = file.replace(/\.map$/, '')
-          const sourceFilename = resolve(outputDir, sourcePath)
-
-          if (!existsSync(sourceFilename)) {
-            console.error(`No corresponding source found for '${file}'`, true)
-            return null
-          }
-
           const sourcemapLocation = resolve(outputDir, file)
 
           try {
@@ -83,15 +75,16 @@ export default function rollbarSourcemaps({
             return null
           }
         })
-        .filter((sourcemap) => sourcemap !== null)
+        .filter((file) => !!file);
 
       if (!sourcemaps.length) return
 
       try {
         await Promise.all(
           sourcemaps.map((asset) => {
+            const minifiedUrl = `${baseUrl}${asset.original_file}`;
+            
             const form = new FormData()
-
             form.set('access_token', accessToken)
             form.set('version', version)
             form.set('minified_url', `${baseUrl}${asset.original_file}`)
